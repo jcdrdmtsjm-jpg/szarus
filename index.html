@@ -29,21 +29,39 @@ addEventListener("resize",resize);resize();
 
 // ===== DŹWIĘK I MUZYKA (Web Audio) =====
 let ac=null,nextNote=0,step=0;
-function audio(){if(!ac){const A=window.AudioContext||window.webkitAudioContext;if(A)ac=new A();}if(ac&&ac.state!=="running")ac.resume();}
+// iPhone: dźwięk odblokowuje się dopiero po dotyku; próbujemy też ominąć przełącznik trybu cichego
+let unlocked=false;
+function audio(){
+ try{if(navigator.audioSession)navigator.audioSession.type="playback";}catch(e){}
+ if(!ac){const A=window.AudioContext||window.webkitAudioContext;if(A)ac=new A();}
+ if(!ac)return;
+ if(ac.state!=="running")ac.resume();
+ if(!unlocked){unlocked=true;
+  const b=ac.createBuffer(1,1,22050),src=ac.createBufferSource();src.buffer=b;src.connect(ac.destination);src.start(0);
+  // cichy element <audio> — na iOS przełącza dźwięk na kanał "media", więc gra nawet w trybie cichym
+  try{const el=document.createElement("audio");el.setAttribute("playsinline","");
+   el.src="data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YUAGAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";el.play().catch(()=>{});}catch(e){}}}
+["touchend","pointerup","click","keydown"].forEach(ev=>addEventListener(ev,audio,{passive:true}));
 function tone(f,d,type,v,when){if(!ac||save.mute)return;const t=when||ac.currentTime,o=ac.createOscillator(),k=ac.createGain();
  o.type=type||"square";o.frequency.value=f;k.gain.setValueAtTime(v||.05,t);k.gain.exponentialRampToValueAtTime(.0001,t+d);
  o.connect(k);k.connect(ac.destination);o.start(t);o.stop(t+d+.02);}
-const sJump=()=>{tone(500,.1,"square",.04);tone(750,.12,"sine",.04)},
- sEat=()=>{tone(880,.08,"triangle",.06);tone(1320,.1,"sine",.04)},
- sHit=()=>tone(150,.3,"sawtooth",.06),
- sPow=()=>[523,659,784,1047].forEach((f,i)=>tone(f,.15,"triangle",.05,ac&&ac.currentTime+i*.08)),
- sWin=()=>[523,659,784,659,784,1047].forEach((f,i)=>tone(f,.2,"square",.04,ac&&ac.currentTime+i*.13));
+// ===== EFEKTY DŹWIĘKOWE =====
+const now=()=>ac?ac.currentTime:0;
+const sJump=()=>{if(!ac)return;const o=ac.createOscillator(),k=ac.createGain(),t0=now();o.type="square";o.frequency.setValueAtTime(380,t0);o.frequency.exponentialRampToValueAtTime(900,t0+.15);
+  k.gain.setValueAtTime(save.mute?0:.12,t0);k.gain.exponentialRampToValueAtTime(.0001,t0+.18);o.connect(k);k.connect(ac.destination);o.start(t0);o.stop(t0+.2);},
+ sEat=()=>{tone(988,.08,"square",.12,now());tone(1319,.14,"square",.12,now()+.07);},          // "dzyń" za smakołyk
+ sPoint=()=>{tone(660,.06,"triangle",.14,now());tone(880,.1,"triangle",.14,now()+.05);},     // przeskoczona przeszkoda
+ sHit=()=>{tone(220,.15,"sawtooth",.14,now());tone(150,.3,"sawtooth",.14,now()+.12);},
+ sPow=()=>[523,659,784,1047,1319].forEach((f,i)=>tone(f,.16,"square",.11,now()+i*.07)),
+ sWin=()=>[523,523,659,784,659,784,1047,1047].forEach((f,i)=>{tone(f,.22,"square",.1,now()+i*.14);tone(f/2,.22,"triangle",.12,now()+i*.14);}),
+ sOver=()=>[392,330,262,196].forEach((f,i)=>tone(f,.3,"triangle",.14,now()+i*.22)),
+ sClick=()=>tone(700,.06,"square",.08,now());
 const MEL=[72,0,76,79,76,0,72,74,76,0,74,72,69,0,71,72, 72,0,76,79,81,79,76,74,72,74,76,74,72,0,0,0];
 const BAS=[48,48,55,55,53,53,55,55];
 function music(){if(!ac||save.mute||state!=="play"&&state!=="menu")return;
  while(nextNote<ac.currentTime+.2){if(nextNote<ac.currentTime)nextNote=ac.currentTime;
-  const m=MEL[step%32];if(m)tone(440*Math.pow(2,(m-69)/12),.16,"triangle",.025,nextNote);
-  if(step%4===0)tone(440*Math.pow(2,(BAS[(step/4)%8]-69)/12),.3,"sine",.04,nextNote);
+  const m=MEL[step%32];if(m)tone(440*Math.pow(2,(m-69)/12),.16,"triangle",.06,nextNote);
+  if(step%4===0)tone(440*Math.pow(2,(BAS[(step/4)%8]-69)/12),.3,"triangle",.07,nextNote);
   nextNote+=.15;step++;}}
 
 // ===== STAN GRY =====
@@ -58,7 +76,7 @@ function jump(){if(state!=="play")return;const max=2;
  if(bun.ground||bun.jumps<max){bun.vy=(power.jump>0?-980:-780)*(bun.ground?1:.85);bun.ground=false;bun.jumps++;sJump();}}
 let buttons=[];
 function pointer(px,py){audio();const x=(px-ox)/sc,y=(py-oy)/sc;
- for(const b of buttons)if(x>b.x&&x<b.x+b.w&&y>b.y&&y<b.y+b.h){b.fn();return;}
+ for(const b of buttons)if(x>b.x&&x<b.x+b.w&&y>b.y&&y<b.y+b.h){sClick();b.fn();return;}
  if(state==="play")jump();}
 cv.addEventListener("touchstart",e=>{e.preventDefault();for(const tc of e.changedTouches)pointer(tc.clientX,tc.clientY);},{passive:false});
 cv.addEventListener("mousedown",e=>pointer(e.clientX,e.clientY));
@@ -108,8 +126,8 @@ function update(dt){t+=dt;music();
     if(power.run>0){score+=5;texts.push({x:it.x,y:top-10,s:"+5",l:1});it.x=-999;}
     else{lives--;hurt=2;sHit();texts.push({x:bun.x,y:bun.y-80,s:"Auć!",l:1});
      if(it.type==="water"){bun.y=GY-1;bun.vy=-700;bun.ground=false;}
-     if(lives<=0){state="over";}}}
-   if(!it.passed&&it.x+it.w<bun.x){it.passed=true;if(!it.hit){score+=5;texts.push({x:bun.x,y:bun.y-90,s:"+5",l:.8});}}
+     if(lives<=0){state="over";sOver();}}}
+   if(!it.passed&&it.x+it.w<bun.x){it.passed=true;if(!it.hit){score+=5;sPoint();texts.push({x:bun.x,y:bun.y-90,s:"+5",l:.8});}}
   }else if(!it.got){const dx=it.x-bun.x,dy=it.y-(bun.y-26);
    if(dx*dx+dy*dy<52*52){it.got=true;
     if(it.kind==="food"){score+=it.pts;sEat();texts.push({x:it.x,y:it.y,s:"+"+it.pts,l:.8});}
